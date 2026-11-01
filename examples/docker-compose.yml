@@ -1,0 +1,100 @@
+# Wealthfolio, wealthfolio-sync and a reverse proxy on one origin. See the README for the setup.
+# Only the proxy publishes ports; the `backend` network has no route to the outside.
+
+services:
+  proxy:
+    # Runs as uid 101 on ports 8080 and 8443, so it needs no capabilities.
+    image: nginxinc/nginx-unprivileged:1.30-alpine@sha256:f5116ed4606f3eb015dd4a8e28cb9b351476dc0ad4bc6e9f93b19cec130cdf03
+    restart: unless-stopped
+    ports:
+      - "80:8080"
+      - "443:8443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./certs:/etc/nginx/certs:ro
+    networks:
+      - edge
+      - backend
+    depends_on:
+      wealthfolio:
+        condition: service_healthy
+    mem_limit: 256m
+    pids_limit: 32
+    read_only: true
+    tmpfs:
+      - /tmp:size=128M
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  wealthfolio:
+    image: wealthfolio/wealthfolio:3.11.0@sha256:3e996e9b3fbf9c945eca89e7b89eb03e0966beb1c51b977ccccb811f76ae2994
+    restart: unless-stopped
+    environment:
+      WF_LISTEN_ADDR: "0.0.0.0:8088"
+      WF_DB_PATH: /data/wealthfolio.db
+      WF_DB_REQUIRE_ENCRYPTION: "1"
+      WF_SECRET_KEY: ${WF_SECRET_KEY:?set it in .env}
+      WF_AUTH_PASSWORD_HASH: ${WF_AUTH_PASSWORD_HASH:?set it in .env}
+      WF_CORS_ALLOW_ORIGINS: ${WFSYNC_ORIGIN:?set it in .env}
+    volumes:
+      - wealthfolio-data:/data
+    networks:
+      - backend
+      - egress
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8088/api/v1/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    mem_limit: 512m
+    pids_limit: 128
+    read_only: true
+    tmpfs:
+      - /tmp:size=64M
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+  wealthfolio-sync:
+    # Builds from this repository, which runs the tests. A released image can replace it:
+    # image: ghcr.io/<owner>/<repository>:<version>
+    build: ..
+    restart: unless-stopped
+    environment:
+      WFSYNC_ORIGIN: ${WFSYNC_ORIGIN:?set it in .env}
+      WFSYNC_SOURCES: ${WFSYNC_SOURCES:-}
+      WFSYNC_YAHOO_ALIASES: ${WFSYNC_YAHOO_ALIASES:-}
+      WFSYNC_WEALTHFOLIO_URL: http://wealthfolio:8088
+      TZ: ${TZ:-Etc/UTC}
+    volumes:
+      - wealthfolio-sync-state:/state
+      - ./secrets:/run/secrets:ro
+    networks:
+      - backend
+      - egress
+    depends_on:
+      wealthfolio:
+        condition: service_healthy
+    user: "10001:10001"
+    init: true
+    mem_limit: 256m
+    pids_limit: 64
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+networks:
+  edge:
+  backend:
+    internal: true
+  egress:
+
+volumes:
+  wealthfolio-data:
+  wealthfolio-sync-state:
