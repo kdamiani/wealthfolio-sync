@@ -1,4 +1,4 @@
-FROM python:3.13.17-alpine@sha256:fa0bb0d0cd7c7d6cef30a69094d32ac2b71c7304c87c6107fec100e1ee4eda02
+FROM python:3.15.0-alpine@sha256:2699b90f4d562a22e2dd076c82f964032f64814204bff36d271a54ba4cc2c7e2
 
 RUN apk add --no-cache tzdata \
  && addgroup -S -g 10001 wfsync \
