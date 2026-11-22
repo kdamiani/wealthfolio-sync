@@ -29,7 +29,7 @@ services:
       - no-new-privileges:true
 
   wealthfolio:
-    image: wealthfolio/wealthfolio:3.11.0@sha256:3e996e9b3fbf9c945eca89e7b89eb03e0966beb1c51b977ccccb811f76ae2994
+    image: wealthfolio/wealthfolio:3.13.1@sha256:a51bf08440ec3c517b728e4d5a7d9134cc564e1749eec45bd4f0b7f39573336e
     restart: unless-stopped
     environment:
       WF_LISTEN_ADDR: "0.0.0.0:8088"
